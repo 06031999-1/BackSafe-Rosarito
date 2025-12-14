@@ -212,3 +212,8 @@ USE [master]
 GO
 ALTER DATABASE [AlertaRosaritobcDB] SET  READ_WRITE 
 GO
+
+## 📚 Documentación
+La API está documentada con **Swagger UI** y permite probar los endpoints protegidos utilizando JWT.
+
+Ruta:http://localhost:3000/api-docs
