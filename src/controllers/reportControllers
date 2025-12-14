@@ -1,0 +1,232 @@
+// src/controllers/reportController.js
+import { Op, Sequelize } from "sequelize";
+import { Report } from "../models/report.model.js";
+import { signImage } from "../utils/signImageUrl.js";
+
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// ==========================
+//   CREATE
+// ==========================
+export const crearReporte = async (req, res) => {
+  try {
+    const {
+      nombre,
+      edad,
+      sexo,
+      fecha_desaparicion,
+      lugar_desaparicion,
+      descripcion,
+      tipo_reporte_id,
+      estado,
+      lat,
+      lng
+    } = req.body;
+
+    const foto = req.file ? `/uploads/${req.file.filename}` : null;
+
+
+    const nuevo = await Report.create({
+      nombre,
+      edad,
+      sexo,
+      fecha_desaparicion,
+      lugar_desaparicion,
+      descripcion,
+      tipo_reporte_id,
+      estado: estado || "pendiente",
+      foto,
+      lat: lat ? Number(lat) : null,
+      lng: lng ? Number(lng) : null
+    });
+
+    res.status(201).json({ ok: true, data: nuevo });
+
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+};
+
+// ==========================
+//   GET ALL
+// ==========================
+export const obtenerReportes = async (req, res) => {
+  try {
+    const registros = await Report.findAll({
+      order: [["createdAt", "DESC"]]
+    });
+
+    const data = registros.map(r => ({
+      ...r.dataValues,
+      foto_url: r.foto // 👈 AQUÍ SE CONSTRUYE
+    }));
+
+    res.json({
+      ok: true,
+      results: data.length,
+      data
+    });
+
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+};
+
+
+// ==========================
+//   GET BY ID
+// ==========================
+export const obtenerReportePorId = async (req, res) => {
+  try {
+    const reporte = await Report.findByPk(req.params.id);
+
+    if (!reporte)
+      return res.status(404).json({ ok: false, message: "Reporte no encontrado" });
+
+    res.json({
+      ok: true,
+      data: {
+        ...reporte.dataValues,
+        foto_url: reporte.foto
+      }
+    });
+
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+};
+
+// ==========================
+//   UPDATE
+// ==========================
+export const actualizarReporte = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reporte = await Report.findByPk(id);
+
+    if (!reporte)
+      return res.status(404).json({ ok: false, error: "Reporte no encontrado" });
+
+    const {
+      nombre,
+      edad,
+      sexo,
+      fecha_desaparicion,
+      lugar_desaparicion,
+      descripcion,
+      tipo_reporte_id,
+      estado,
+      lat,
+      lng
+    } = req.body;
+
+    const foto = req.file ? req.file.filename : reporte.foto;
+
+    await reporte.update({
+      nombre,
+      edad,
+      sexo,
+      fecha_desaparicion,
+      lugar_desaparicion,
+      descripcion,
+      tipo_reporte_id,
+      estado,
+      lat,
+      lng,
+      foto
+    });
+
+    res.json({
+      ok: true,
+      message: "Reporte actualizado correctamente",
+      data: reporte
+    });
+
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+};
+
+// ==========================
+//   DELETE
+// ==========================
+export const eliminarReporte = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reporte = await Report.findByPk(id);
+
+    if (!reporte)
+      return res.status(404).json({ ok: false, message: "Reporte no encontrado" });
+
+    if (reporte.foto) {
+  const filePath = path.join(
+    __dirname,
+    "../../",
+    reporte.foto.replace("/uploads/", "uploads/")
+  );
+
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+}
+
+    await reporte.destroy();
+
+    res.json({
+      ok: true,
+      message: "Reporte y foto eliminados correctamente"
+    });
+
+  } catch (error) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+};
+
+// ==========================
+//   ESTADÍSTICAS POR ZONA
+// ==========================
+export const estadisticasPorZona = async (req, res) => {
+  try {
+    const zonas = await Report.findAll({
+      attributes: [
+        "lugar_desaparicion",
+        [Sequelize.fn("COUNT", Sequelize.col("lugar_desaparicion")), "total"]
+      ],
+      group: ["lugar_desaparicion"]
+    });
+
+    res.json({ ok: true, data: zonas });
+
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: "Error al obtener estadísticas por zona"
+    });
+  }
+};
+
+// ==========================
+//   HEATMAP
+// ==========================
+export const obtenerHeatmap = async (req, res) => {
+  try {
+    const reportes = await Report.findAll({
+      attributes: ["lat", "lng"],
+      where: {
+        lat: { [Op.ne]: null },
+        lng: { [Op.ne]: null }
+      }
+    });
+
+    res.json({ ok: true, data: reportes });
+
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: "Error al obtener datos del heatmap"
+    });
+  }
+};
